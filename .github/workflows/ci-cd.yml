@@ -20,26 +20,22 @@ jobs:
 
       # Backend install
       - name: Install backend deps
-        run: |
-          cd backend
-          npm install
+        working-directory: task-tracker/backend
+        run: npm install
 
       # Frontend install
       - name: Install frontend deps
-        run: |
-          cd frontend
-          npm install
+        working-directory: task-tracker/frontend
+        run: npm install
 
       # Optional: add tests later
       - name: Run backend tests
-        run: |
-          cd backend
-          echo "No tests yet"
+        working-directory: task-tracker/backend
+        run: echo "No tests yet"
 
       - name: Run frontend build
-        run: |
-          cd frontend
-          npm run build
+        working-directory: task-tracker/frontend
+        run: npm run build
 
   docker-build:
     runs-on: ubuntu-latest
@@ -49,4 +45,5 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker images
+        working-directory: task-tracker
         run: docker compose build
