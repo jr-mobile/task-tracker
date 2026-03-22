@@ -4,9 +4,25 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/task-tracker-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/task-tracker-frontend
 
 jobs:
-  build-and-test:
+  backend-test:
+    name: Backend Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -16,34 +32,135 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: task-tracker/backend/package-lock.json
 
-      # Backend install
       - name: Install backend deps
         working-directory: task-tracker/backend
-        run: npm install
+        run: npm ci
 
-      # Frontend install
-      - name: Install frontend deps
-        working-directory: task-tracker/frontend
-        run: npm install
-
-      # Optional: add tests later
       - name: Run backend tests
         working-directory: task-tracker/backend
-        run: echo "No tests yet"
+        run: npm test -- --runInBand
+
+  frontend-quality:
+    name: Frontend Lint and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: task-tracker/frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: task-tracker/frontend
+        run: npm ci
+
+      - name: Run frontend lint
+        working-directory: task-tracker/frontend
+        run: npm run lint
 
       - name: Run frontend build
         working-directory: task-tracker/frontend
         run: npm run build
 
-  docker-build:
+  docker-build-and-publish:
+    name: Docker Build and Publish
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [backend-test, frontend-quality]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Build Docker images
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose config
         working-directory: task-tracker
-        run: docker compose build
+        run: docker compose config > /tmp/task-tracker-compose.rendered.yml
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract backend image metadata
+        id: backend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-
+
+      - name: Extract frontend image metadata
+        id: frontend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: task-tracker/backend
+          file: task-tracker/backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.backend-meta.outputs.tags }}
+          labels: ${{ steps.backend-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: task-tracker/frontend
+          file: task-tracker/frontend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.frontend-meta.outputs.tags }}
+          labels: ${{ steps.frontend-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create deployment bundle
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p deploy-artifacts
+          cp task-tracker/docker-compose.yml deploy-artifacts/docker-compose.yml
+          {
+            echo "backend_image=${{ env.BACKEND_IMAGE }}:sha-${GITHUB_SHA}"
+            echo "frontend_image=${{ env.FRONTEND_IMAGE }}:sha-${GITHUB_SHA}"
+            echo "git_sha=${GITHUB_SHA}"
+            echo "git_ref=${GITHUB_REF}"
+          } > deploy-artifacts/image-summary.txt
+
+      - name: Upload deployment bundle
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-bundle
+          path: deploy-artifacts
+
+      - name: Publish workflow summary
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "## Deploy-ready images"
+            echo ""
+            echo "- Backend: \`${{ env.BACKEND_IMAGE }}:sha-${GITHUB_SHA}\`"
+            echo "- Frontend: \`${{ env.FRONTEND_IMAGE }}:sha-${GITHUB_SHA}\`"
+            echo "- Deployment bundle: uploaded as \`deployment-bundle\` artifact"
+          } >> "$GITHUB_STEP_SUMMARY"
