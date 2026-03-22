@@ -17,7 +17,7 @@ export interface CreateTaskData {
   dueDate?: string | null;
 }
 
-export interface UpdateTaskData extends Partial<CreateTaskData> {}
+export type UpdateTaskData = Partial<CreateTaskData>;
 
 export interface ApiResponse<T> {
   data?: T;

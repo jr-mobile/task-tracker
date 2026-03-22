@@ -31,8 +31,10 @@ export const TaskList: React.FC<TaskListProps> = ({
       case 'title':
         return a.title.localeCompare(b.title);
       case 'priority':
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
+        {
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
         return priorityOrder[b.priority] - priorityOrder[a.priority];
+        }
       case 'dueDate':
         if (!a.dueDate && !b.dueDate) return 0;
         if (!a.dueDate) return 1;
@@ -48,7 +50,7 @@ export const TaskList: React.FC<TaskListProps> = ({
     if (window.confirm('Are you sure you want to delete this task?')) {
       try {
         await deleteTask(id);
-      } catch (err) {
+      } catch {
         // Error is handled by the hook
       }
     }

@@ -36,7 +36,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ createTask, error }) => {
         priority: 'medium',
         dueDate: '',
       });
-    } catch (err) {
+    } catch {
       // Error is handled by the hook
     } finally {
       setIsSubmitting(false);

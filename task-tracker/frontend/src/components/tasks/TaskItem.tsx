@@ -45,7 +45,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onDelete, updateTask }
         dueDate: editData.dueDate || null,
       });
       setIsEditing(false);
-    } catch (err) {
+    } catch {
       // Error is handled by the hook
     } finally {
       setIsUpdating(false);
