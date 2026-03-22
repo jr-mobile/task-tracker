@@ -1,0 +1,16 @@
+{
+  "name": "task-tracker",
+  "version": "1.0.0",
+  "description": "A simple task tracking application with React frontend and Node.js backend",
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm start",
+    "build": "docker-compose build",
+    "test": "cd backend && npm test",
+    "lint": "cd frontend && npm run lint"
+  },
+  "keywords": ["task-tracker", "react", "nodejs", "sqlite", "docker"],
+  "author": "Jon",
+  "license": "MIT"
+}

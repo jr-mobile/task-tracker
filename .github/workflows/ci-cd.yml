@@ -1,0 +1,52 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Backend install
+      - name: Install backend deps
+        run: |
+          cd backend
+          npm install
+
+      # Frontend install
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm install
+
+      # Optional: add tests later
+      - name: Run backend tests
+        run: |
+          cd backend
+          echo "No tests yet"
+
+      - name: Run frontend build
+        run: |
+          cd frontend
+          npm run build
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: docker compose build
